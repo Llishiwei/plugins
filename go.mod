@@ -15,6 +15,7 @@ require (
 	github.com/godbus/dbus/v5 v5.0.4
 	github.com/j-keck/arping v1.0.2
 	github.com/mattn/go-shellwords v1.0.12
+	github.com/mattn/go-sqlite3 v1.14.11 // indirect
 	github.com/onsi/ginkgo v1.16.4
 	github.com/onsi/gomega v1.15.0
 	github.com/safchain/ethtool v0.0.0-20210803160452-9aa261dae9b1
@@ -22,4 +23,6 @@ require (
 	github.com/vishvananda/netlink v1.1.1-0.20210330154013-f5de75959ad5
 	github.com/vishvananda/netns v0.0.0-20210104183010-2eb08e3e575f // indirect
 	golang.org/x/sys v0.0.0-20210809222454-d867a43fc93e
+	gorm.io/driver/sqlite v1.2.6
+	gorm.io/gorm v1.22.5
 )
