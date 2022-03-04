@@ -87,7 +87,7 @@ func (t AllocatorTestCase) run(idx int) (*current.IPConfig, error) {
 		rangeID:  "rangeid",
 	}
 
-	return alloc.Get("ID", "eth0", nil)
+	return alloc.get("ID", "eth0", nil)
 }
 
 var _ = Describe("host-local ip allocator", func() {
@@ -238,28 +238,28 @@ var _ = Describe("host-local ip allocator", func() {
 		It("should not allocate the broadcast address", func() {
 			alloc := mkalloc()
 			for i := 2; i < 7; i++ {
-				res, err := alloc.Get(fmt.Sprintf("ID%d", i), "eth0", nil)
+				res, err := alloc.get(fmt.Sprintf("ID%d", i), "eth0", nil)
 				Expect(err).ToNot(HaveOccurred())
 				s := fmt.Sprintf("192.168.1.%d/29", i)
 				Expect(s).To(Equal(res.Address.String()))
 				fmt.Fprintln(GinkgoWriter, "got ip", res.Address.String())
 			}
 
-			x, err := alloc.Get("ID8", "eth0", nil)
+			x, err := alloc.get("ID8", "eth0", nil)
 			fmt.Fprintln(GinkgoWriter, "got ip", x)
 			Expect(err).To(HaveOccurred())
 		})
 
 		It("should allocate in a round-robin fashion", func() {
 			alloc := mkalloc()
-			res, err := alloc.Get("ID", "eth0", nil)
+			res, err := alloc.get("ID", "eth0", nil)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(res.Address.String()).To(Equal("192.168.1.2/29"))
 
-			err = alloc.Release("ID", "eth0")
+			err = alloc.Release("ID", "eth0", "", "", 0)
 			Expect(err).ToNot(HaveOccurred())
 
-			res, err = alloc.Get("ID", "eth0", nil)
+			res, err = alloc.get("ID", "eth0", nil)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(res.Address.String()).To(Equal("192.168.1.3/29"))
 
@@ -269,7 +269,7 @@ var _ = Describe("host-local ip allocator", func() {
 			It("must allocate the requested IP", func() {
 				alloc := mkalloc()
 				requestedIP := net.IP{192, 168, 1, 5}
-				res, err := alloc.Get("ID", "eth0", requestedIP)
+				res, err := alloc.get("ID", "eth0", requestedIP)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(res.Address.IP.String()).To(Equal(requestedIP.String()))
 			})
@@ -277,11 +277,11 @@ var _ = Describe("host-local ip allocator", func() {
 			It("must fail when the requested IP is allocated", func() {
 				alloc := mkalloc()
 				requestedIP := net.IP{192, 168, 1, 5}
-				res, err := alloc.Get("ID", "eth0", requestedIP)
+				res, err := alloc.get("ID", "eth0", requestedIP)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(res.Address.IP.String()).To(Equal(requestedIP.String()))
 
-				_, err = alloc.Get("ID", "eth0", requestedIP)
+				_, err = alloc.get("ID", "eth0", requestedIP)
 				Expect(err).To(MatchError(`requested IP address 192.168.1.5 is not available in range set 192.168.1.1-192.168.1.6`))
 			})
 
@@ -289,7 +289,7 @@ var _ = Describe("host-local ip allocator", func() {
 				alloc := mkalloc()
 				(*alloc.rangeset)[0].RangeEnd = net.IP{192, 168, 1, 4}
 				requestedIP := net.IP{192, 168, 1, 5}
-				_, err := alloc.Get("ID", "eth0", requestedIP)
+				_, err := alloc.get("ID", "eth0", requestedIP)
 				Expect(err).To(HaveOccurred())
 			})
 
@@ -297,7 +297,7 @@ var _ = Describe("host-local ip allocator", func() {
 				alloc := mkalloc()
 				(*alloc.rangeset)[0].RangeStart = net.IP{192, 168, 1, 3}
 				requestedIP := net.IP{192, 168, 1, 2}
-				_, err := alloc.Get("ID", "eth0", requestedIP)
+				_, err := alloc.get("ID", "eth0", requestedIP)
 				Expect(err).To(HaveOccurred())
 			})
 		})

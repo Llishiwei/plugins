@@ -78,6 +78,11 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 	defer store.Close()
 
+	podNS, podName, err := resolvePodNSAndNameFromEnvArgs(args.Args)
+	if err != nil {
+		return fmt.Errorf("failed to get pod ns/name from env args: %s", err)
+	}
+
 	// Keep the allocators we used, so we can release all IPs if an error
 	// occurs after we start allocating
 	allocs := []*allocator.IPAllocator{}
@@ -103,11 +108,11 @@ func cmdAdd(args *skel.CmdArgs) error {
 			}
 		}
 
-		ipConf, err := allocator.Get(args.ContainerID, args.IfName, requestedIP)
+		ipConf, err := allocator.GetByPodNSAndName(args.ContainerID, args.IfName, requestedIP, podNS, podName)
 		if err != nil {
 			// Deallocate all already allocated IPs
 			for _, alloc := range allocs {
-				_ = alloc.Release(args.ContainerID, args.IfName)
+				_ = alloc.Release(args.ContainerID, args.IfName, podNS, podName, 0)
 			}
 			return fmt.Errorf("failed to allocate for range %d: %v", idx, err)
 		}
@@ -120,7 +125,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	// If an IP was requested that wasn't fulfilled, fail
 	if len(requestedIPs) != 0 {
 		for _, alloc := range allocs {
-			_ = alloc.Release(args.ContainerID, args.IfName)
+			_ = alloc.Release(args.ContainerID, args.IfName, podNS, podName, 0)
 		}
 		errstr := "failed to allocate all requested IPs:"
 		for _, ip := range requestedIPs {
@@ -146,12 +151,17 @@ func cmdDel(args *skel.CmdArgs) error {
 	}
 	defer store.Close()
 
+	podNS, podName, err := resolvePodNSAndNameFromEnvArgs(args.Args)
+	if err != nil {
+		return fmt.Errorf("failed to get pod ns/name from env args: %s", err)
+	}
+
 	// Loop through all ranges, releasing all IPs, even if an error occurs
 	var errors []string
 	for idx, rangeset := range ipamConf.Ranges {
 		ipAllocator := allocator.NewIPAllocator(&rangeset, store, idx)
 
-		err := ipAllocator.Release(args.ContainerID, args.IfName)
+		err := ipAllocator.Release(args.ContainerID, args.IfName, podNS, podName, ipamConf.ReservedIPExpirationDays)
 		if err != nil {
 			errors = append(errors, err.Error())
 		}
@@ -161,4 +171,36 @@ func cmdDel(args *skel.CmdArgs) error {
 		return fmt.Errorf(strings.Join(errors, ";"))
 	}
 	return nil
+}
+
+//Args: [][2]string{
+//{"IgnoreUnknown", "1"},
+//{"K8S_POD_NAMESPACE", podNs},
+//{"K8S_POD_NAME", podName},
+//{"K8S_POD_INFRA_CONTAINER_ID", podSandboxID.ID},
+//},
+func resolvePodNSAndNameFromEnvArgs(envArgs string) (string, string, error) {
+	var ns, name string
+	if envArgs == "" {
+		return ns, name, nil
+	}
+
+	pairs := strings.Split(envArgs, ";")
+	for _, pair := range pairs {
+		kv := strings.Split(pair, "=")
+		if len(kv) != 2 {
+			return ns, name, fmt.Errorf("ARGS: invalid pair %q", pair)
+		}
+
+		if kv[0] == "K8S_POD_NAMESPACE" {
+			ns = kv[1]
+		} else if kv[0] == "K8S_POD_NAME" {
+			name = kv[1]
+		}
+	}
+
+	if len(ns)+len(name) > 230 {
+		return "", "", fmt.Errorf("ARGS: length of pod ns and name exceed the length limit")
+	}
+	return ns, name, nil
 }

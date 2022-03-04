@@ -46,13 +46,14 @@ type Net struct {
 // range directly, and wish to preserve backwards compatability
 type IPAMConfig struct {
 	*Range
-	Name       string
-	Type       string         `json:"type"`
-	Routes     []*types.Route `json:"routes"`
-	DataDir    string         `json:"dataDir"`
-	ResolvConf string         `json:"resolvConf"`
-	Ranges     []RangeSet     `json:"ranges"`
-	IPArgs     []net.IP       `json:"-"` // Requested IPs from CNI_ARGS, args and capabilities
+	Name                     string
+	Type                     string         `json:"type"`
+	Routes                   []*types.Route `json:"routes"`
+	DataDir                  string         `json:"dataDir"`
+	ResolvConf               string         `json:"resolvConf"`
+	Ranges                   []RangeSet     `json:"ranges"`
+	IPArgs                   []net.IP       `json:"-"` // Requested IPs from CNI_ARGS, args and capabilities
+	ReservedIPExpirationDays int            `json:"reservedIPExpirationDays,omitempty"`
 }
 
 type IPAMEnvArgs struct {

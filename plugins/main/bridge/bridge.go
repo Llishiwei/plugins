@@ -21,6 +21,7 @@ import (
 	"io/ioutil"
 	"net"
 	"runtime"
+	"strings"
 	"syscall"
 	"time"
 
@@ -63,7 +64,8 @@ type NetConf struct {
 		Mac string `json:"mac,omitempty"`
 	} `json:"runtimeConfig,omitempty"`
 
-	mac string
+	mac                       string
+	ReservedMACExpirationDays int `json:"reservedMACExpirationDays,omitempty"`
 }
 
 type BridgeArgs struct {
@@ -416,6 +418,38 @@ func enableIPForward(family int) error {
 	return ip.EnableIP6Forward()
 }
 
+//Args: [][2]string{
+//{"IgnoreUnknown", "1"},
+//{"K8S_POD_NAMESPACE", podNs},
+//{"K8S_POD_NAME", podName},
+//{"K8S_POD_INFRA_CONTAINER_ID", podSandboxID.ID},
+//},
+func resolvePodNSAndNameFromEnvArgs(envArgs string) (string, string, error) {
+	var ns, name string
+	if envArgs == "" {
+		return ns, name, nil
+	}
+
+	pairs := strings.Split(envArgs, ";")
+	for _, pair := range pairs {
+		kv := strings.Split(pair, "=")
+		if len(kv) != 2 {
+			return ns, name, fmt.Errorf("ARGS: invalid pair %q", pair)
+		}
+
+		if kv[0] == "K8S_POD_NAMESPACE" {
+			ns = kv[1]
+		} else if kv[0] == "K8S_POD_NAME" {
+			name = kv[1]
+		}
+	}
+
+	if len(ns)+len(name) > 230 {
+		return "", "", fmt.Errorf("ARGS: length of pod ns and name exceed the length limit")
+	}
+	return ns, name, nil
+}
+
 func cmdAdd(args *skel.CmdArgs) error {
 	var success bool = false
 
@@ -445,8 +479,31 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 	defer netns.Close()
 
+	podNS, podName, err := resolvePodNSAndNameFromEnvArgs(args.Args)
+	if err != nil {
+		return fmt.Errorf("failed to get pod ns/name from env args: %s", err)
+	}
+
+	store, err := New(n.Name, "")
+	if err != nil {
+		return err
+	}
+	defer store.Close()
+
+	mac, err := store.GetContainerMAC(podNS, podName)
+	if err != nil {
+		return err
+	}
+	if len(mac) > 0 && len(n.mac) == 0 {
+		n.mac = mac
+	}
+
 	hostInterface, containerInterface, err := setupVeth(netns, br, args.IfName, n.MTU, n.HairpinMode, n.Vlan, n.mac)
 	if err != nil {
+		return err
+	}
+
+	if err := store.SaveContainerMac(containerInterface.Mac, podNS, podName); err != nil {
 		return err
 	}
 
@@ -636,6 +693,23 @@ func cmdDel(args *skel.CmdArgs) error {
 			return err
 		}
 	}
+
+	podNs, podName, err := resolvePodNSAndNameFromEnvArgs(args.Args)
+	if err != nil {
+		return fmt.Errorf("failed to get pod ns/name from env args: %s", err)
+	}
+
+	store, err := New(n.Name, "")
+	if err != nil {
+		return err
+	}
+	defer store.Close()
+
+	days := n.ReservedMACExpirationDays
+	if days > 0 {
+		store.RemoveExpiredRecords("mac_*_*_*", days)
+	}
+	store.SaveContainerMac("", podNs, podName)
 
 	if args.Netns == "" {
 		return nil

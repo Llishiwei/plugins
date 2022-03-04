@@ -94,3 +94,19 @@ func (s *FakeStore) GetByID(id string, ifname string) []net.IP {
 func (s *FakeStore) SetIPMap(m map[string]string) {
 	s.ipMap = m
 }
+
+func (s *FakeStore) HasReservedIP(podNs, podName string) (bool, net.IP) {
+	ip := net.IP{}
+	if podName == "" {
+		return false, ip
+	}
+	return false, ip
+}
+
+func (s *FakeStore) ReservePodInfo(ip net.IP, podNs, podName string) error {
+	return nil
+}
+
+func (s *FakeStore) RemoveExpiredRecords(pattern string, expirationDays int) error {
+	return nil
+}

@@ -41,10 +41,30 @@ func NewIPAllocator(s *RangeSet, store backend.Store, id int) *IPAllocator {
 	}
 }
 
-// Get allocates an IP
-func (a *IPAllocator) Get(id string, ifname string, requestedIP net.IP) (*current.IPConfig, error) {
+// GetByPodNSAndName allocates an IP or used reserved IP for specified pod
+func (a *IPAllocator) GetByPodNSAndName(id, ifname string, requestedIP net.IP, podNS, podName string) (*current.IPConfig, error) {
 	a.store.Lock()
 	defer a.store.Unlock()
+	if len(podName) == 0 {
+		return a.get(id, ifname, requestedIP)
+	}
+
+	podIPIsExist, knownIP := a.store.HasReservedIP(podNS, podName)
+	if !podIPIsExist {
+		knownIP = requestedIP
+	}
+
+	ipCfg, err := a.get(id, ifname, knownIP)
+	if err != nil {
+		return ipCfg, err
+	}
+
+	err = a.store.ReservePodInfo(ipCfg.Address.IP, podNS, podName)
+	return ipCfg, err
+}
+
+// get allocates an IP
+func (a *IPAllocator) get(id string, ifname string, requestedIP net.IP) (*current.IPConfig, error) {
 
 	var reservedIP *net.IPNet
 	var gw net.IP
@@ -117,10 +137,14 @@ func (a *IPAllocator) Get(id string, ifname string, requestedIP net.IP) (*curren
 }
 
 // Release clears all IPs allocated for the container with given ID
-func (a *IPAllocator) Release(id string, ifname string) error {
+func (a *IPAllocator) Release(id string, ifname string, podNS, podName string, expirationDays int) error {
 	a.store.Lock()
 	defer a.store.Unlock()
 
+	if expirationDays > 0 {
+		a.store.RemoveExpiredRecords("ip_*_*_*", expirationDays)
+	}
+	a.store.ReservePodInfo(nil, podNS, podName)
 	return a.store.ReleaseByID(id, ifname)
 }
 

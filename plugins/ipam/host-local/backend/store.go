@@ -25,4 +25,7 @@ type Store interface {
 	Release(ip net.IP) error
 	ReleaseByID(id string, ifname string) error
 	GetByID(id string, ifname string) []net.IP
+	HasReservedIP(podNs, podName string) (bool, net.IP)
+	ReservePodInfo(ip net.IP, podNs, podName string) error
+	RemoveExpiredRecords(pattern string, expirationDays int) error
 }
