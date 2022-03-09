@@ -256,7 +256,7 @@ var _ = Describe("host-local ip allocator", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(res.Address.String()).To(Equal("192.168.1.2/29"))
 
-			err = alloc.Release("ID", "eth0")
+			err = alloc.Release("", "", "", "ID", "eth0")
 			Expect(err).ToNot(HaveOccurred())
 
 			res, err = alloc.Get("ID", "eth0", nil)

@@ -43,9 +43,6 @@ func NewIPAllocator(s *RangeSet, store backend.Store, id int) *IPAllocator {
 
 // Get allocates an IP
 func (a *IPAllocator) Get(id string, ifname string, requestedIP net.IP) (*current.IPConfig, error) {
-	a.store.Lock()
-	defer a.store.Unlock()
-
 	var reservedIP *net.IPNet
 	var gw net.IP
 
@@ -117,11 +114,17 @@ func (a *IPAllocator) Get(id string, ifname string, requestedIP net.IP) (*curren
 }
 
 // Release clears all IPs allocated for the container with given ID
-func (a *IPAllocator) Release(id string, ifname string) error {
+func (a *IPAllocator) Release(network, dataDir, envArgs string, id string, ifname string) error {
 	a.store.Lock()
 	defer a.store.Unlock()
 
-	return a.store.ReleaseByID(id, ifname)
+	err := a.store.ReleaseByID(id, ifname)
+	if err != nil {
+		return err
+	}
+
+	markDeletedIP(network, dataDir, envArgs)
+	return nil
 }
 
 type RangeIter struct {

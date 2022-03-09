@@ -22,6 +22,7 @@ import (
 	"runtime"
 	"strings"
 
+	db "github.com/containernetworking/plugins/pkg/database"
 	"github.com/containernetworking/plugins/plugins/ipam/host-local/backend"
 )
 
@@ -102,7 +103,7 @@ func (s *Store) FindByKey(id string, ifname string, match string) (bool, error) 
 	found := false
 
 	err := filepath.Walk(s.dataDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() {
+		if err != nil || info.IsDir() || (info.Name() == db.BridgeDBName || info.Name() == db.HostLocalDBName) {
 			return nil
 		}
 		data, err := ioutil.ReadFile(path)
@@ -138,7 +139,7 @@ func (s *Store) FindByID(id string, ifname string) bool {
 func (s *Store) ReleaseByKey(id string, ifname string, match string) (bool, error) {
 	found := false
 	err := filepath.Walk(s.dataDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() {
+		if err != nil || info.IsDir() || (info.Name() == db.BridgeDBName || info.Name() == db.HostLocalDBName) {
 			return nil
 		}
 		data, err := ioutil.ReadFile(path)
@@ -182,7 +183,7 @@ func (s *Store) GetByID(id string, ifname string) []net.IP {
 
 	// walk through all ips in this network to get the ones which belong to a specific ID
 	_ = filepath.Walk(s.dataDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() {
+		if err != nil || info.IsDir() || (info.Name() == db.BridgeDBName || info.Name() == db.HostLocalDBName) {
 			return nil
 		}
 		data, err := ioutil.ReadFile(path)
