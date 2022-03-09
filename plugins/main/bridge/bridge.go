@@ -63,7 +63,8 @@ type NetConf struct {
 		Mac string `json:"mac,omitempty"`
 	} `json:"runtimeConfig,omitempty"`
 
-	mac string
+	mac             string
+	ReservedMACDays int `json:"reservedMACDays,omitempty"`
 }
 
 type BridgeArgs struct {
@@ -445,10 +446,20 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 	defer netns.Close()
 
+	lock, err := NewBridgeFileLock(n.Name, defaultDataDir)
+	if err != nil {
+		return err
+	}
+	defer lock.Close()
+
+	getReservedMAC(lock, n, args.Args)
+
 	hostInterface, containerInterface, err := setupVeth(netns, br, args.IfName, n.MTU, n.HairpinMode, n.Vlan, n.mac)
 	if err != nil {
 		return err
 	}
+
+	saveReservedMAC(lock, n.Name, args.Args, containerInterface.Mac)
 
 	// Assume L2 interface only
 	result := &current.Result{
@@ -636,6 +647,8 @@ func cmdDel(args *skel.CmdArgs) error {
 			return err
 		}
 	}
+
+	releaseMAC(n.Name, args.Args, n.ReservedMACDays)
 
 	if args.Netns == "" {
 		return nil
