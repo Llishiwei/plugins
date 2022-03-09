@@ -78,6 +78,8 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 	defer store.Close()
 
+	allocator.ReleaseExpiredIPs(store, ipamConf.Name, ipamConf.DataDir, ipamConf.ReservedIPDays)
+
 	// Keep the allocators we used, so we can release all IPs if an error
 	// occurs after we start allocating
 	allocs := []*allocator.IPAllocator{}
@@ -103,11 +105,11 @@ func cmdAdd(args *skel.CmdArgs) error {
 			}
 		}
 
-		ipConf, err := allocator.Get(args.ContainerID, args.IfName, requestedIP)
+		ipConf, err := allocator.GetIP(ipamConf.Name, ipamConf.DataDir, args.Args, args.ContainerID, args.IfName, requestedIP)
 		if err != nil {
 			// Deallocate all already allocated IPs
 			for _, alloc := range allocs {
-				_ = alloc.Release(args.ContainerID, args.IfName)
+				_ = alloc.Release(ipamConf.Name, ipamConf.DataDir, args.Args, args.ContainerID, args.IfName)
 			}
 			return fmt.Errorf("failed to allocate for range %d: %v", idx, err)
 		}
@@ -120,7 +122,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	// If an IP was requested that wasn't fulfilled, fail
 	if len(requestedIPs) != 0 {
 		for _, alloc := range allocs {
-			_ = alloc.Release(args.ContainerID, args.IfName)
+			_ = alloc.Release(ipamConf.Name, ipamConf.DataDir, args.Args, args.ContainerID, args.IfName)
 		}
 		errstr := "failed to allocate all requested IPs:"
 		for _, ip := range requestedIPs {
@@ -146,12 +148,14 @@ func cmdDel(args *skel.CmdArgs) error {
 	}
 	defer store.Close()
 
+	allocator.ReleaseExpiredIPs(store, ipamConf.Name, ipamConf.DataDir, ipamConf.ReservedIPDays)
+
 	// Loop through all ranges, releasing all IPs, even if an error occurs
 	var errors []string
 	for idx, rangeset := range ipamConf.Ranges {
 		ipAllocator := allocator.NewIPAllocator(&rangeset, store, idx)
 
-		err := ipAllocator.Release(args.ContainerID, args.IfName)
+		err := ipAllocator.Release(ipamConf.Name, ipamConf.DataDir, args.Args, args.ContainerID, args.IfName)
 		if err != nil {
 			errors = append(errors, err.Error())
 		}
